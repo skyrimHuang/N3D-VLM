@@ -101,6 +101,12 @@ python detection.py
 rerun outputs/test1.rrd
 ```
 
+
+## License
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
+
 ## Citation
 
 ```BibTeX
