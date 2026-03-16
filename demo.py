@@ -536,6 +536,7 @@ config_pretrained = AutoConfig.from_pretrained(model_args.model_name_or_path)
 model = Qwen2_5_VLForConditionalGeneration_pe.from_pretrained(
     model_args.model_name_or_path,
     config = config_pretrained,
+    torch_dtype=torch.float16,  # 添加这一行，强制使用 FP16，减小显存占用
 )
 model.config.cutoff_token_len = 1024
 model.to("cuda")
@@ -721,7 +722,7 @@ for nn in trange(len(data)):
         tokenizer, timeout=200.0, skip_prompt=True, skip_special_tokens=True
     )
     generate_kwargs = dict(
-        {"input_ids": input_ids, 
+        {"input_ids": input_ids,
         "point_clouds": torch.from_numpy(updated_points)[None].cuda(),
         "pixel_values": pixel_values['pixel_values'].cuda(),
         "image_grid_thw": pixel_values['image_grid_thw'].cuda(),
@@ -737,14 +738,15 @@ for nn in trange(len(data)):
         attention_mask=attention_mask,
         pad_token_id=tokenizer.eos_token_id
     )
-    t = Thread(target=model.generate, kwargs=generate_kwargs)
-    t.start()
+    with torch.no_grad():
+        t = Thread(target=model.generate, kwargs=generate_kwargs)
+        t.start()
 
-    generate_texts = []
-    for text in streamer:
-        generate_texts.append(text)
+        generate_texts = []
+        for text in streamer:
+            generate_texts.append(text)
 
-    layout_str = " ".join(generate_texts)
+        layout_str = " ".join(generate_texts)
 
     if 'bbox_0=Bbox(' in layout_str:
         try:
@@ -765,6 +767,10 @@ for nn in trange(len(data)):
         pred_language_string = serialize_bboxes_uv(bbox_objects_pred_unnormed)
     else:
         pred_language_string = layout_str
+
+    # 清理显存
+    torch.cuda.empty_cache()
+    gc.collect()
 
     gt_item = parse_bbox_dict_xy(answer)
     pd_item = parse_bbox_dict_xy(pred_language_string)
@@ -888,7 +894,7 @@ for nn in trange(len(data)):
         tokenizer, timeout=200.0, skip_prompt=True, skip_special_tokens=True
     )
     generate_kwargs = dict(
-        {"input_ids": input_ids, 
+        {"input_ids": input_ids,
         "point_clouds": torch.from_numpy(updated_points)[None].cuda(),
         "pixel_values": pixel_values['pixel_values'].cuda(),
         "image_grid_thw": pixel_values['image_grid_thw'].cuda(),
@@ -904,15 +910,20 @@ for nn in trange(len(data)):
         attention_mask=attention_mask,
         pad_token_id=tokenizer.eos_token_id
     )
-    t = Thread(target=model.generate, kwargs=generate_kwargs)
-    t.start()
+    with torch.no_grad():
+        t = Thread(target=model.generate, kwargs=generate_kwargs)
+        t.start()
 
-    generate_texts = []
-    for text in streamer2:
-        generate_texts.append(text)
+        generate_texts = []
+        for text in streamer2:
+            generate_texts.append(text)
 
-    pred_answer2 = " ".join(generate_texts)
+        pred_answer2 = " ".join(generate_texts)
     pred_answer2 = " ".join(pred_answer2.split())
+
+    # 清理显存
+    torch.cuda.empty_cache()
+    gc.collect()
 
 
     save_dict.append(
