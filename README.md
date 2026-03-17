@@ -101,6 +101,71 @@ python detection.py
 rerun outputs/test1.rrd
 ```
 
+## Experiment 4.4.2 (ScanNet v2, real point cloud)
+
+For thesis experiment **"3D semantic fusion and physical attribute extraction"**, you can run:
+
+### 1) Prepare ScanNet data and GT boxes
+
+```bash
+python scripts/exp442_prepare_scannet.py \
+    --scans_root /home/hba/Documents/Dataset/ScanNet/scans \
+    --output_root outputs/exp442_scannet \
+    --export_frame_npz \
+    --frame_stride 60 \
+    --max_frames_per_scene 20
+```
+
+This will generate:
+- `outputs/exp442_scannet/manifest.json`
+- per-scene `scene_points.npz`
+- per-scene `gt_boxes.json` (AABB + PCA-OBB)
+- optional per-frame `.npz` point clouds from real depth (no MoGe reconstruction)
+
+### 2) Run benchmark (single-view vs multi-view+PCA/OBB)
+
+```bash
+python scripts/exp442_benchmark.py \
+    --manifest outputs/exp442_scannet/manifest.json \
+    --single_view_pred path/to/single_view_predictions.json \
+    --multiview_pca_pred path/to/multiview_pca_predictions.json \
+    --output_dir outputs/exp442_results
+```
+
+Output includes:
+- `table_4_8.md` (3D-IoU AABB/OBB + centroid error)
+- scene-level metric CSVs
+- `summary.json` (with Wilcoxon significance)
+- `figure_4_5_*.png` qualitative comparisons
+
+### 3) Force demo to use real point cloud only
+
+By default, `demo.py` now requires existing point cloud files. To allow fallback MoGe generation, explicitly add:
+
+```bash
+python demo.py --allow_moge_fallback
+```
+
+### Prediction JSON format
+
+`exp442_benchmark.py` expects each prediction file as either:
+
+```json
+{
+    "scene0000_00": [
+        {"center": [x, y, z], "size": [sx, sy, sz], "yaw": 0.0, "label": "chair", "score": 0.9, "instance_id": "12"}
+    ]
+}
+```
+
+or
+
+```json
+[
+    {"scene_id": "scene0000_00", "boxes": [{"center": [x, y, z], "size": [sx, sy, sz], "yaw": 0.0, "label": "chair"}]}
+]
+```
+
 
 ## License
 

@@ -508,6 +508,8 @@ parser.add_argument('--template_path', type=str, default="config/code_template.t
                     help='Path to the template file')
 parser.add_argument('--save_dir_name', type=str, default='demo',
                     help='Directory name for saving output')
+parser.add_argument('--allow_moge_fallback', action='store_true',
+                    help='If set, generate point cloud with MoGe when points file does not exist')
 infer_args = parser.parse_args()
 
 # paths
@@ -558,8 +560,13 @@ for nn in trange(len(data)):
 
     image_path = item['images'][0]
     pcd_path = item['points'][0]
-    if not os.path.exists(pcd_path): # get pcd from moge2
+    if not os.path.exists(pcd_path) and infer_args.allow_moge_fallback: # get pcd from moge2
         get_moge_data(image_path, pcd_path)
+    elif not os.path.exists(pcd_path):
+        raise FileNotFoundError(
+            f"Point cloud file not found: {pcd_path}. "
+            f"Use real point cloud input or pass --allow_moge_fallback to auto-generate by MoGe."
+        )
     question_type = item['question_type']
 
     question = item["messages"][0]["content"]
