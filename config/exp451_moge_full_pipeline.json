@@ -1,0 +1,21 @@
+[
+  {
+    "messages": [
+      {
+        "content": "<image>Detect boxes. The reference code is as followed: <code_template>",
+        "role": "user"
+      },
+      {
+        "content": "",
+        "role": "assistant"
+      }
+    ],
+    "images": [
+      "data/exp451_frame120.jpg"
+    ],
+    "points": [
+      "data/exp451_frame120_moge.npz"
+    ],
+    "question_type": ""
+  }
+]

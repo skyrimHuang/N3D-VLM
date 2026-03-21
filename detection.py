@@ -533,12 +533,16 @@ data_args.preprocessing_num_workers = 1
 tokenizer = AutoTokenizer.from_pretrained(model_args.model_name_or_path)
 processor = AutoProcessor.from_pretrained(model_args.model_name_or_path)
 config_pretrained = AutoConfig.from_pretrained(model_args.model_name_or_path)
+device = "cuda" if torch.cuda.is_available() else "cpu"
+model_dtype = torch.float16 if device == "cuda" else torch.float32
 model = Qwen2_5_VLForConditionalGeneration_pe.from_pretrained(
     model_args.model_name_or_path,
     config = config_pretrained,
+    torch_dtype=model_dtype,
+    low_cpu_mem_usage=True,
 )
 model.config.cutoff_token_len = 1024
-model.to("cuda")
+model.to(device)
 model.eval()
 
 template = get_template_and_fix_tokenizer(tokenizer, data_args)
@@ -713,18 +717,18 @@ for nn in trange(len(data)):
 
     attention_mask = [1] * len(input_ids)
 
-    input_ids = torch.tensor(input_ids, dtype=torch.long).unsqueeze(0).cuda()
-    labels = torch.tensor(labels, dtype=torch.long).unsqueeze(0).cuda()
-    attention_mask = torch.tensor(attention_mask, dtype=torch.long).unsqueeze(0).cuda()
+    input_ids = torch.tensor(input_ids, dtype=torch.long).unsqueeze(0).to(device)
+    labels = torch.tensor(labels, dtype=torch.long).unsqueeze(0).to(device)
+    attention_mask = torch.tensor(attention_mask, dtype=torch.long).unsqueeze(0).to(device)
 
     streamer = TextIteratorStreamer(
         tokenizer, timeout=200.0, skip_prompt=True, skip_special_tokens=True
     )
     generate_kwargs = dict(
         {"input_ids": input_ids, 
-        "point_clouds": torch.from_numpy(updated_points)[None].cuda(),
-        "pixel_values": pixel_values['pixel_values'].cuda(),
-        "image_grid_thw": pixel_values['image_grid_thw'].cuda(),
+        "point_clouds": torch.from_numpy(updated_points)[None].to(device),
+        "pixel_values": pixel_values['pixel_values'].to(device),
+        "image_grid_thw": pixel_values['image_grid_thw'].to(device),
         },
         streamer=streamer,
         max_new_tokens=4096,
@@ -752,6 +756,22 @@ for nn in trange(len(data)):
             bbox_objects_pred_unnormed = []
             for bbox in bbox_objects_pred:
                 bbox_objects_pred_unnormed.append(copy.copy(bbox).undiscretize_and_unnormalize(world_max=2.0, scale_max=0.625, num_bins=1000))
+
+            if question_type == "targeted_detection":
+                question_lower = question.lower()
+                allowed_classes = set()
+                for cls_name in ["fire extinguisher", "chair"]:
+                    if cls_name in question_lower:
+                        allowed_classes.add(cls_name)
+                if allowed_classes:
+                    bbox_objects_pred = [
+                        bbox for bbox in bbox_objects_pred
+                        if " ".join(bbox.class_name.split()).lower() in allowed_classes
+                    ]
+                    bbox_objects_pred_unnormed = [
+                        bbox for bbox in bbox_objects_pred_unnormed
+                        if " ".join(bbox.class_name.split()).lower() in allowed_classes
+                    ]
         except:
             bbox_objects_pred = []
             bbox_objects_pred_unnormed = []
@@ -802,22 +822,32 @@ for nn in trange(len(data)):
     depth_intr = np.load(pcd_path)
     pcd = depth_intr['pcd'].reshape(-1, 4).astype(np.float32)[:,:3]
 
-    image = Image.open(image_path)
-    if w >= h:
-        new_w = 640
-        new_h = int(pcd.shape[0] / 640)
+    if 'rgb' in depth_intr.files:
+        rgb = depth_intr['rgb'].reshape(-1, 3).astype(np.float32)
+        if rgb.max() > 1.0:
+            rgb = rgb / 255.0
+        if rgb.shape[0] != pcd.shape[0]:
+            min_n = min(rgb.shape[0], pcd.shape[0])
+            pcd = pcd[:min_n]
+            rgb = rgb[:min_n]
     else:
-        new_h = 640
-        new_w = int(pcd.shape[0] / 640)
-    image = image.resize((new_w, new_h))
-    if image.mode != "RGB":
-        image = image.convert("RGB")
-    rgb = np.asarray(image).reshape(-1, 3).astype(np.float32)/255.
+        image = Image.open(image_path)
+        if w >= h:
+            new_w = 640
+            new_h = int(pcd.shape[0] / 640)
+        else:
+            new_h = 640
+            new_w = int(pcd.shape[0] / 640)
+        image = image.resize((new_w, new_h))
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+        rgb = np.asarray(image).reshape(-1, 3).astype(np.float32)/255.
 
     pcd = np.concatenate([pcd, rgb], axis=1)
 
     points_list1 = [pcd[:,:6]]
+    rrd_stem = os.path.basename(pcd_path).replace('.npz', '')
     vis_results_in_rrd(points_list = points_list1, \
     gt_bboxes_list = gt_list, \
         pred_bboxes_list = pd_list, \
-            save_path=f'{args_output}/{save_dir_name}/{image_path.split("/")[-1].split(".")[0]}.rrd')
+            save_path=f'{args_output}/{save_dir_name}/{rrd_stem}.rrd')

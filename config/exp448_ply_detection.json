@@ -1,0 +1,21 @@
+[
+  {
+    "messages": [
+      {
+        "content": "<image>Detect boxes of fire extinguisher and chair, and output 3D bounding boxes in the required Bbox format. The reference code is as followed: <code_template>",
+        "role": "user"
+      },
+      {
+        "content": "",
+        "role": "assistant"
+      }
+    ],
+    "images": [
+      "data/test1.jpg"
+    ],
+    "points": [
+      "data/reconstructed_points_original_vggt_dense_w640_rgb.npz"
+    ],
+    "question_type": "targeted_detection"
+  }
+]

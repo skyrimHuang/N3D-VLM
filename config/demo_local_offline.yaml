@@ -1,0 +1,4 @@
+model_name_or_path: /home/hba/.cache/huggingface/hub/models--yuxinhk--N3D-VLM/snapshots/7970ecf8d93b1d504788dc2a4e3adeb5e8b2101a
+template: n3d_vlm
+infer_backend: huggingface
+trust_remote_code: true
