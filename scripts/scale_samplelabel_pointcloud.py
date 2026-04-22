@@ -32,6 +32,7 @@ def load_binary_ply_xyzrgba(ply_path: Path) -> tuple[list[bytes], np.ndarray]:
     if vertex_count is None:
         raise ValueError("Cannot parse vertex count from PLY header")
 
+
     dtype = np.dtype(
         [
             ("x", "<f4"),
